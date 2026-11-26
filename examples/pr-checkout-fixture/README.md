@@ -1,15 +1,14 @@
 # PR checkout fixture
 
 This tiny static page is a deterministic target for the Git Bot PR-review demo.
-It intentionally contains the checkout defect tracked in GitHub issue #1.
+GitHub issue #1 reported a simulated checkout failure; this change makes the
+fixture display the expected purchase confirmation.
 
-## Reported behavior
+## Acceptance flow
 
 1. Open `index.html` in a browser.
 2. Click **Complete purchase**.
-3. The page displays a simulated `TypeError` instead of confirming order #1042.
-
-Expected behavior: show a purchase confirmation for order #1042 and the $49.00 total.
+3. The page confirms order #1042 and the $49.00 total.
 
 ## Serve locally
 
