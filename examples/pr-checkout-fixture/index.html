@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Checkout demo</title>
+    <style>
+      body { margin: 4rem; color: #17202a; font: 18px system-ui, sans-serif; }
+      main { box-sizing: border-box; max-width: 680px; margin: auto; padding: 2rem; border: 1px solid #ccd; border-radius: 12px; }
+      button { padding: .7rem 1rem; border: 0; border-radius: 6px; background: #174ea6; color: white; cursor: pointer; font: inherit; }
+      #result { margin-top: 1.5rem; padding: 1rem; border-radius: 6px; background: #eef2f7; }
+      #result.error { background: #fee; color: #900; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Checkout</h1>
+      <p>Order #1042 · $49.00</p>
+      <button id="complete-purchase">Complete purchase</button>
+      <p id="result" role="status" aria-live="polite">Ready to pay</p>
+    </main>
+    <script>
+      document.querySelector('#complete-purchase').addEventListener('click', () => {
+        const result = document.querySelector('#result');
+        result.className = 'error';
+        result.textContent = 'BUG: Payment failed — TypeError: Cannot read properties of undefined (reading "id")';
+      });
+    </script>
+  </body>
+</html>
