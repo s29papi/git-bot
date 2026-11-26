@@ -42,17 +42,7 @@ kane-cli login
 kane-cli whoami
 ```
 
-Kane CLI requires Chrome. Git Bot's recorder also needs a Chrome DevTools Protocol (CDP) endpoint so it can capture the same browser that Kane controls. On Linux, start Chrome with a dedicated temporary profile and a localhost-only endpoint:
-
-```sh
-google-chrome --headless=new \
-  --remote-debugging-address=127.0.0.1 \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/git-bot-chrome \
-  about:blank
-```
-
-If your Chrome executable is named `google-chrome-stable`, use that command instead. Keep Chrome running while recording. For other platforms, start Chrome with the equivalent remote-debugging port and a separate user-data directory.
+Kane CLI requires Google Chrome. Git Bot also needs a local Chrome DevTools Protocol (CDP) endpoint so its recorder can capture the browser Kane controls. During a skill run, the agent starts Chrome with a dedicated temporary profile and localhost-only CDP endpoint when one is not already available, then stops the browser it started after recording. You do not need to start a server, switch branches, or run the recorder yourself.
 
 For PR-based skill use, authenticate GitHub CLI as well:
 
@@ -95,43 +85,6 @@ codex  # or: claude
 
 Open the application repository in the coding agent, then invoke the skill with a PR URL or number.
 
-## Optional: smoke-test one local recording
-
-This is a one-run check of the screenshot-to-MP4 recorder against the deliberately broken local fixture. It does not inspect a PR, derive an objective, or compare branches. For the full base/head PR workflow, use [Review a PR with the skill](#review-a-pr-with-the-skill) or follow [Reproduce the base/head demo for PR #2](#reproduce-the-basehead-demo-for-pr-2).
-
-The included checkout fixture is deliberately broken. Start a local server in one terminal from the Git Bot repository:
-
-```sh
-python3 -m http.server 8765 \
-  --bind 127.0.0.1 \
-  --directory examples/pr-checkout-fixture
-```
-
-In another terminal, run a Kane objective that expects the correct purchase confirmation:
-
-```sh
-npm start -- \
-  --url http://127.0.0.1:8765/ \
-  --objective 'Click Complete purchase and verify it confirms order #1042 for $49.00.' \
-  --output recordings/checkout-bug.mp4 \
-  --cdp-endpoint http://127.0.0.1:9222
-```
-
-Kane should report a failure because the fixture displays the simulated payment error. The command returns Kane's exit status but still writes the MP4 when the objective fails. New recordings go in the ignored `recordings/` directory.
-
-The CLI options are:
-
-```text
---url <url>              Starting page
---objective <text>       Browser objective for Kane
---output <path>          MP4 path (default: recordings/bug-repro.mp4)
---cdp-endpoint <url>     Chrome endpoint (default: http://127.0.0.1:9222)
---kane-bin <path>         Kane executable (default: kane-cli)
---fps <number>           Screenshot sample rate, 1–10 (default: 2)
-```
-
-Run `npm start -- --help` for the current command help. `FFMPEG_BIN` can override the bundled FFmpeg executable if needed.
-
 ## Review a PR with the skill
 
 From the application project in Codex or Claude Code, run:
@@ -155,72 +108,13 @@ The agent then:
 
 The skill handles one browser objective at a time. If the PR covers multiple independent user flows, it picks the flow tied to the stated issue or explains the limitation. The agent reports blockers such as missing GitHub access, Kane authentication, Chrome/CDP, or safe app setup instead of claiming an unperformed comparison.
 
-## Reproduce the base/head demo for PR #2
+## Demo PR #2
 
-[PR #2](https://github.com/s29papi/git-bot/pull/2) is the real-repository demo: the `main` version of the fixture shows a simulated payment `TypeError`; `fix/checkout-fixture-issue-1` shows the order confirmation. The objective below is intentionally the same for both versions. Kane should fail on base and pass on the PR head.
-
-These commands use detached Git worktrees. They check out the two refs side by side without switching or changing the branch in your current working tree. Run them from the Git Bot checkout:
-
-```sh
-git fetch origin main fix/checkout-fixture-issue-1
-WORKTREES=$(mktemp -d /tmp/git-bot-pr2.XXXXXX)
-git worktree add --detach "$WORKTREES/base" origin/main
-git worktree add --detach "$WORKTREES/head" origin/fix/checkout-fixture-issue-1
-```
-
-Start Chrome as shown in [Install and configure](#install-and-configure). Keep using the same terminal where you created the worktrees; the following commands use the `WORKTREES` variable set there. Start a local server for each version:
-
-```sh
-python3 -m http.server 8765 --bind 127.0.0.1 \
-  --directory "$WORKTREES/base/examples/pr-checkout-fixture" \
-  > /tmp/git-bot-pr2-base-server.log 2>&1 &
-BASE_SERVER=$!
-
-python3 -m http.server 8766 --bind 127.0.0.1 \
-  --directory "$WORKTREES/head/examples/pr-checkout-fixture" \
-  > /tmp/git-bot-pr2-head-server.log 2>&1 &
-HEAD_SERVER=$!
-```
-
-Run the same Kane objective against base and head. The first run is expected to return Kane's failure exit code. Capture both exit codes and continue to the head run even when base fails:
-
-```sh
-BASE_STATUS=0
-npm start -- \
-  --url http://127.0.0.1:8765/ \
-  --objective 'On the checkout page, click Complete purchase and verify it confirms order #1042 for $49.00.' \
-  --output recordings/pr-2-base.mp4 \
-  --cdp-endpoint http://127.0.0.1:9222 || BASE_STATUS=$?
-
-HEAD_STATUS=0
-npm start -- \
-  --url http://127.0.0.1:8766/ \
-  --objective 'On the checkout page, click Complete purchase and verify it confirms order #1042 for $49.00.' \
-  --output recordings/pr-2-head.mp4 \
-  --cdp-endpoint http://127.0.0.1:9222 || HEAD_STATUS=$?
-
-printf 'Kane exit codes: base=%s head=%s\n' "$BASE_STATUS" "$HEAD_STATUS"
-```
-
-Expected results:
-
-- **Base (`origin/main`):** Kane clicks the button and observes the simulated payment `TypeError`. Kane reports a failed objective, and Git Bot still writes `recordings/pr-2-base.mp4`.
-- **Head (`origin/fix/checkout-fixture-issue-1`):** Kane clicks the button and verifies the confirmation for order #1042 and $49.00. Kane reports a pass and Git Bot writes `recordings/pr-2-head.mp4`.
-
-Stop the local servers and remove only the temporary worktrees when finished:
-
-```sh
-kill "$BASE_SERVER" "$HEAD_SERVER"
-git worktree remove "$WORKTREES/base"
-git worktree remove "$WORKTREES/head"
-rmdir "$WORKTREES"
-```
-
-If you close the terminal before cleanup, use `git worktree list` to find the temporary paths and remove them with `git worktree remove <path>`.
+[PR #2](https://github.com/s29papi/git-bot/pull/2) was used to demonstrate the full agent workflow. The agent generated the purchase-confirmation objective from the PR and linked issue, ran it against the base and PR head, and produced a bug clip and a fix-verification clip. Kane observed the simulated payment `TypeError` on base and passed on the head, which confirms the fix for this flow. These videos are local artifacts under the ignored `recordings/` directory; the agent does not upload or comment them on GitHub.
 
 ## Demo artifact
 
-[`examples/checkout-bug/repro.mp4`](examples/checkout-bug/repro.mp4) is a checked-in sample of the checkout failure. New runs are written under `recordings/`, which is ignored by Git. The PR comparison videos are local artifacts unless you explicitly copy or publish them yourself.
+[`examples/checkout-bug/repro.mp4`](examples/checkout-bug/repro.mp4) is a checked-in sample of the checkout failure. The PR skill creates new recordings under the ignored `recordings/` directory.
 
 ## How capture works
 
