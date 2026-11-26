@@ -153,6 +153,69 @@ The agent then:
 
 The skill handles one browser objective at a time. If the PR covers multiple independent user flows, it picks the flow tied to the stated issue or explains the limitation. The agent reports blockers such as missing GitHub access, Kane authentication, Chrome/CDP, or safe app setup instead of claiming an unperformed comparison.
 
+## Reproduce the base/head demo for PR #2
+
+[PR #2](https://github.com/s29papi/git-bot/pull/2) is the real-repository demo: the `main` version of the fixture shows a simulated payment `TypeError`; `fix/checkout-fixture-issue-1` shows the order confirmation. The objective below is intentionally the same for both versions. Kane should fail on base and pass on the PR head.
+
+These commands use detached Git worktrees. They check out the two refs side by side without switching or changing the branch in your current working tree. Run them from the Git Bot checkout:
+
+```sh
+git fetch origin main fix/checkout-fixture-issue-1
+WORKTREES=$(mktemp -d /tmp/git-bot-pr2.XXXXXX)
+git worktree add --detach "$WORKTREES/base" origin/main
+git worktree add --detach "$WORKTREES/head" origin/fix/checkout-fixture-issue-1
+```
+
+Start Chrome as shown in [Install and configure](#install-and-configure). Keep using the same terminal where you created the worktrees; the following commands use the `WORKTREES` variable set there. Start a local server for each version:
+
+```sh
+python3 -m http.server 8765 --bind 127.0.0.1 \
+  --directory "$WORKTREES/base/examples/pr-checkout-fixture" \
+  > /tmp/git-bot-pr2-base-server.log 2>&1 &
+BASE_SERVER=$!
+
+python3 -m http.server 8766 --bind 127.0.0.1 \
+  --directory "$WORKTREES/head/examples/pr-checkout-fixture" \
+  > /tmp/git-bot-pr2-head-server.log 2>&1 &
+HEAD_SERVER=$!
+```
+
+Run the same Kane objective against base and head. The first run is expected to return Kane's failure exit code. Capture both exit codes and continue to the head run even when base fails:
+
+```sh
+BASE_STATUS=0
+npm start -- \
+  --url http://127.0.0.1:8765/ \
+  --objective 'On the checkout page, click Complete purchase and verify it confirms order #1042 for $49.00.' \
+  --output recordings/pr-2-base.mp4 \
+  --cdp-endpoint http://127.0.0.1:9222 || BASE_STATUS=$?
+
+HEAD_STATUS=0
+npm start -- \
+  --url http://127.0.0.1:8766/ \
+  --objective 'On the checkout page, click Complete purchase and verify it confirms order #1042 for $49.00.' \
+  --output recordings/pr-2-head.mp4 \
+  --cdp-endpoint http://127.0.0.1:9222 || HEAD_STATUS=$?
+
+printf 'Kane exit codes: base=%s head=%s\n' "$BASE_STATUS" "$HEAD_STATUS"
+```
+
+Expected results:
+
+- **Base (`origin/main`):** Kane clicks the button and observes the simulated payment `TypeError`. Kane reports a failed objective, and Git Bot still writes `recordings/pr-2-base.mp4`.
+- **Head (`origin/fix/checkout-fixture-issue-1`):** Kane clicks the button and verifies the confirmation for order #1042 and $49.00. Kane reports a pass and Git Bot writes `recordings/pr-2-head.mp4`.
+
+Stop the local servers and remove only the temporary worktrees when finished:
+
+```sh
+kill "$BASE_SERVER" "$HEAD_SERVER"
+git worktree remove "$WORKTREES/base"
+git worktree remove "$WORKTREES/head"
+rmdir "$WORKTREES"
+```
+
+If you close the terminal before cleanup, use `git worktree list` to find the temporary paths and remove them with `git worktree remove <path>`.
+
 ## Demo artifact
 
 [`examples/checkout-bug/repro.mp4`](examples/checkout-bug/repro.mp4) is a checked-in sample of the checkout failure. New runs are written under `recordings/`, which is ignored by Git. The PR comparison videos are local artifacts unless you explicitly copy or publish them yourself.
