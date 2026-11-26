@@ -1,47 +1,45 @@
 ---
 name: git-bot
-description: Run Git Bot's PR bug-video workflow from a repository checkout, or explain which PR review checks are available. Use when asked to reproduce a PR bug, capture a Kane browser run, or run Git Bot checks.
+description: Review a pull request with Git Bot by deriving a Kane browser objective, recording a bug-fix comparison, or reporting which checks are available.
 ---
 
 # Git Bot
 
-Use this workflow to run the Git Bot PR review prototype from the current project. The skill is an interface to the project; it does not grant repository, GitHub, preview, or Kane access.
+Use the Git Bot prototype to review a pull request from a coding-agent session. The skill does not grant GitHub, repository, preview, or Kane access; use the access and tools available in the session.
 
 ## Invocation
 
-Pass a PR URL or number and, optionally, the check to run and a symptom to reproduce. Accept either a full URL such as `https://github.com/acme/app/pull/42` or a number such as `42`. Supported check names are `video`, `migrations`, `preview`, `docs`, `bisect`, and `all`.
+Accept a PR URL or a number that can be resolved from the current repository. If omitted, use the PR for the current branch when GitHub CLI can identify one. The default check is `video`.
 
-- Claude Code: `/git-bot [PR URL or number] [video|migrations|preview|docs|bisect|all] [symptom]`
-- Codex: `$git-bot [PR URL or number] [video|migrations|preview|docs|bisect|all] [symptom]`
+- Claude Code: `/git-bot [PR URL or number] [video|migrations|preview|docs|bisect|all]`
+- Codex: `$git-bot [PR URL or number] [video|migrations|preview|docs|bisect|all]`
 
-Examples:
-
-- `/git-bot 42 video "checkout fails after applying a coupon"`
-- `$git-bot https://github.com/acme/app/pull/42 video "checkout fails after applying a coupon"`
-- `/git-bot 42 all`
-
-The host may also select the skill through its skill picker or automatic skill discovery.
+Examples: `/git-bot 42 video` · `$git-bot https://github.com/acme/app/pull/42`
 
 ## Workflow
 
-1. **Check repository context before doing anything else.** Run `git rev-parse --show-toplevel` from the agent session's active working directory. Do not treat the directory containing this skill as the target checkout unless it is also the active working directory. If the command fails, stop before looking up a PR or running Kane, and say:
+1. **Resolve the PR and repository.** Try the active checkout first. A full PR URL can identify a public or accessible repository through GitHub CLI even when the session is outside a checkout. Resolve a bare number only when a repository context is unambiguous, including the checkout that contains this skill. If no PR can be resolved, ask for a full PR URL or the project checkout; do not guess.
 
-   > Git Bot needs a repository checkout. Open the project in your coding agent, or `cd` into its checkout, then retry the same Git Bot command (for example, `$git-bot 45` in Codex or `/git-bot 45` in Claude Code).
+2. **Check what is implemented.** Read the Git Bot project's README and `package.json` and follow its current CLI. The local recorder supports one Kane run per invocation. The `video` skill workflow may compose two invocations for a bug-fix PR. Migration, preview review, docs-gap detection, and bisect are not implemented; report them unavailable, including under `all`.
 
-2. **Parse the request and resolve the target.** Extract the PR URL or number and requested check from the user's message, regardless of whether they use the example order. If no check is specified, use `video`. Use an explicitly provided PR target; if absent, try to identify the PR for the current branch with the available GitHub CLI. If it cannot be identified, pause and ask:
+3. **Derive one objective from PR evidence.** Read the PR title/body, linked issue and acceptance criteria, relevant discussion, changed files/diff, and useful docs or tests. State the expected user-visible result using the issue/spec or established behavior, not just the PR's implementation. Use a concise Kane objective with an observable result. Mention which evidence supports it. If there are multiple independent flows, select the one tied to the PR's stated purpose or explain that the prototype handles one objective at a time.
 
-   > I found the repository, but couldn't identify a pull request. What PR URL or number should I review?
+4. **Choose the right comparison.** For a bug-fix PR, the objective describes the behavior the base is supposed to lack and the PR head is supposed to satisfy. Run that same objective on base and head. For a feature PR, do not call the expected absence on base a bug: verify the feature on the head and describe the result as feature verification. Do not claim a fix or reproduced bug if PR evidence does not establish that intent.
 
-   Do not guess a repository or PR or start a PR-specific check until the user provides the target.
+5. **Prepare comparable, safe app versions.** Find preview URLs for the needed refs in deployment checks, PR comments, or repository configuration. If unavailable, use separate disposable checkouts at the exact base and head refs; do not switch or overwrite the user's checkout. Follow the target project's setup instructions and use its lockfile. Serve static fixtures at the app route itself. Use a local or preview environment with disposable data, never production or real user data. Keep the two runs in equivalent clean state; do not execute deploys, migrations, real purchases, or other irreversible actions. If an app cannot be prepared safely, report the blocker rather than improvising.
 
-3. **Check what the project actually supports.** Read the repository's current README and `package.json` (or the relevant project configuration) before running a workflow. Treat those files and the implemented CLI as the source of truth; do not claim planned checks are available.
+6. **Run Kane and record each run.** Use `GIT_BOT_HOME` when set to find the Git Bot CLI checkout; otherwise locate the checkout containing this skill. Follow that checkout's README and run `npm start` from its root. Ensure Kane is authenticated, dependencies are installed, and Chrome is available at a local CDP endpoint. For each version, invoke the recorder once with that version's URL, the same objective (for bug-fix comparisons), and a distinct output path, such as `recordings/pr-42-base.mp4` and `recordings/pr-42-head.mp4`. The CLI shape is `npm start -- --url <url> --objective '<objective>' --output <path> --cdp-endpoint <endpoint>`. Use a dedicated browser profile if starting Chrome. The recorder loads the URL before capture and annotates the video with Kane's objective, action steps, result, and a matching click-target callout. Do not ask the user for an objective, URL, or start command when the PR and repository provide enough evidence to derive them.
 
-4. **Choose the requested check.** If no check is specified, use `video`, the current prototype's implemented workflow. For `all`, report the status of each check and run only implemented checks.
+7. **Interpret and compare Kane's results.** Read each Kane `run_end` status and its summary/reason/verdict. A nonzero exit or `failed` status alone is not proof of an application bug: classify it as a confirmed app failure only when Kane's evidence attributes the outcome to the application. Setup, navigation, and agent/tool errors are inconclusive. For a bug-fix comparison:
 
-5. **Run the video workflow only when its inputs are available.** The current prototype requires a browser URL reachable from the local machine, Kane CLI authenticated locally, Chrome with its local CDP endpoint enabled, and `ffmpeg`. Find the exact supported CLI arguments in the project's README or `npm start -- --help`. If the preview URL or symptom is missing, ask for it rather than inventing a reproduction. Run the existing command, preserve its exit status, and report the generated MP4 path and Kane result. A failed Kane run can still produce useful video evidence.
+   - Confirmed app failure on base + pass on head: bug reproduced and fix verified.
+   - Confirmed app failure on base + app failure on head: bug reproduced; fix not verified. Check whether the head failure is the same defect before drawing that conclusion.
+   - Pass on base + app failure on head: regression for this objective.
+   - Pass on both: the expected behavior already worked on base; no bug was reproduced.
+   - Any inconclusive run: report the observed results and blocker; do not claim a complete comparison.
 
-6. **Report the integration boundary.** The current prototype records a local browser run. It does not run recording in Kane's cloud, create GitHub checks, upload video, or comment on a PR. Do not claim the video was posted to GitHub. The migration safety, preview review, README gap detection, and automated bisect checks are not implemented in this prototype; report them as unavailable rather than simulating a pass.
+   Never weaken the objective to force a pass. A base failure is the bug evidence; the PR-head run verifies whether the change fixes it.
 
-## Response
+8. **Report results and limits.** Give the PR, objective, evidence for the expected result, each Kane status, the comparison conclusion, and the corresponding MP4 paths. Say clearly when a clip is only a feature verification or when a run is inconclusive. This prototype records locally: it does not run the recorder in Kane's cloud, create GitHub checks, upload videos, or comment on a PR. Do not imply those integrations happened.
 
-Summarize the target PR (if resolved), check attempted, Kane outcome, and evidence path. State any missing inputs or unavailable checks plainly. For the no-repository case, give the checkout instruction above and stop.
+If the repository or PR cannot be resolved, ask for a full PR URL or project checkout. If a required preview, local setup, Kane login, or browser endpoint is unavailable, state the specific blocker and report only the work that actually completed.

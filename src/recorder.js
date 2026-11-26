@@ -71,14 +71,42 @@ function connectPage(webSocketDebuggerUrl) {
   });
 }
 
-export async function startRecorder({ cdpEndpoint, framesDir, fps }) {
+export async function startRecorder({ cdpEndpoint, framesDir, fps, url, targetText }) {
   const pages = await listPageTargets(cdpEndpoint);
   const page = pages.find((target) => target.url === 'about:blank') ?? pages[0];
   const ws = await connectPage(page.webSocketDebuggerUrl);
   await sendCommand(ws, 'Page.enable');
+  await sendCommand(ws, 'Page.navigate', { url });
+
+  const readyDeadline = Date.now() + 30_000;
+  let pageReady = false;
+  while (Date.now() < readyDeadline) {
+    try {
+      const result = await sendCommand(ws, 'Runtime.evaluate', {
+        expression: 'document.readyState',
+        returnByValue: true,
+      });
+      if (result.result?.value === 'complete') {
+        pageReady = true;
+        break;
+      }
+    } catch {
+      // Navigation can replace the execution context; retry after it settles.
+    }
+    await sleep(100);
+  }
+  if (!pageReady) {
+    ws.close();
+    throw new Error(`Timed out loading ${url} before recording`);
+  }
+  await sleep(500);
+  console.log(`Loaded ${url}; starting recording`);
 
   let stopped = false;
   let frameCount = 0;
+  const frameTimes = [];
+  const targetBoxes = [];
+  const captureStartedAt = Date.now();
   let captureError;
   const intervalMs = Math.round(1000 / fps);
 
@@ -86,6 +114,26 @@ export async function startRecorder({ cdpEndpoint, framesDir, fps }) {
     while (!stopped) {
       const startedAt = Date.now();
       try {
+        let targetBox = null;
+        if (targetText) {
+          const expression = `(() => {
+            const needle = ${JSON.stringify(targetText.toLowerCase())};
+            const controls = [...document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]')];
+            const element = controls.find((candidate) => {
+              const label = (candidate.innerText || candidate.value || candidate.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+              return label.includes(needle);
+            });
+            if (!element) return null;
+            const rect = element.getBoundingClientRect();
+            return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
+          })()`;
+          try {
+            const response = await sendCommand(ws, 'Runtime.evaluate', { expression, returnByValue: true });
+            targetBox = response.result?.value ?? null;
+          } catch {
+            // The app can replace its execution context while Kane navigates.
+          }
+        }
         const screenshot = await sendCommand(ws, 'Page.captureScreenshot', {
           format: 'jpeg',
           quality: 85,
@@ -95,6 +143,8 @@ export async function startRecorder({ cdpEndpoint, framesDir, fps }) {
         frameCount += 1;
         const filename = `${String(frameCount).padStart(6, '0')}.jpg`;
         await fs.writeFile(path.join(framesDir, filename), Buffer.from(screenshot.data, 'base64'));
+        frameTimes.push(Date.now() - captureStartedAt);
+        targetBoxes.push(targetBox);
       } catch (error) {
         captureError = error;
         break;
@@ -104,13 +154,14 @@ export async function startRecorder({ cdpEndpoint, framesDir, fps }) {
   })();
 
   return {
+    startedAt: captureStartedAt,
     async stop() {
       stopped = true;
       await captureLoop;
       ws.close();
       if (captureError) throw captureError;
       if (frameCount === 0) throw new Error('Chrome did not produce any screenshots');
-      return frameCount;
+      return { frameCount, frameTimes, targetBoxes };
     },
   };
 }
