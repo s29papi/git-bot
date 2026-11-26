@@ -1,6 +1,6 @@
 ---
 name: git-bot
-description: Review a pull request with Git Bot by deriving a Kane browser objective, recording a bug-fix comparison, or reporting which checks are available.
+description: Review a pull request with Git Bot by deriving a Kane browser objective, recording a bug-fix comparison, bisecting a browser regression, or reporting which checks are available.
 ---
 
 # Git Bot
@@ -20,7 +20,7 @@ Examples: `/git-bot 42 video` · `$git-bot https://github.com/acme/app/pull/42`
 
 1. **Resolve the PR and repository.** Try the active checkout first. A full PR URL can identify a public or accessible repository through GitHub CLI even when the session is outside a checkout. Resolve a bare number only when a repository context is unambiguous, including the checkout that contains this skill. If no PR can be resolved, ask for a full PR URL or the project checkout; do not guess.
 
-2. **Check what is implemented.** Read the Git Bot project's README and `package.json` and follow its current CLI. The local recorder supports one Kane run per invocation. The `video` skill workflow may compose two invocations for a bug-fix PR. Migration, preview review, docs-gap detection, and bisect are not implemented; report them unavailable, including under `all`.
+2. **Check what is implemented.** Read the Git Bot project's README and `package.json` and follow its current CLI. The local recorder supports one Kane run per invocation. The `video` skill workflow may compose two invocations for a bug-fix PR. Bisect is an agent-orchestrated workflow using repeated recorder invocations. Migration, preview review, and docs-gap detection are not implemented; report them unavailable, including under `all`.
 
 3. **Derive one objective from PR evidence.** Read the PR title/body, linked issue and acceptance criteria, relevant discussion, changed files/diff, and useful docs or tests. State the expected user-visible result using the issue/spec or established behavior, not just the PR's implementation. Use a concise Kane objective with an observable result. Mention which evidence supports it. If there are multiple independent flows, select the one tied to the PR's stated purpose or explain that the prototype handles one objective at a time.
 
@@ -41,5 +41,18 @@ Examples: `/git-bot 42 video` · `$git-bot https://github.com/acme/app/pull/42`
    Never weaken the objective to force a pass. A base failure is the bug evidence; the PR-head run verifies whether the change fixes it.
 
 8. **Report results and limits.** Give the PR, objective, evidence for the expected result, each Kane status, the comparison conclusion, and the corresponding MP4 paths. Say clearly when a clip is only a feature verification or when a run is inconclusive. This prototype records locally: it does not run the recorder in Kane's cloud, create GitHub checks, upload videos, or comment on a PR. Do not imply those integrations happened.
+
+## Bisect workflow
+
+Use this workflow only when the request is `bisect` (or `all`) and the evidence identifies a regression range: a known-good revision and a known-bad revision. For a PR suspected of introducing a regression, the merge base/base revision can be treated as good and the PR head as bad only when available evidence supports that the flow passed before the PR and fails at its head. A bug-fix PR with a failing base and passing head is not a regression range; report that it is suitable for the base/head video comparison instead.
+
+1. Derive one Kane objective from the regression report and expected behavior, as in step 3. Establish from tests, CI, issue evidence, or user-provided context that the good ref passes and bad ref fails. If either endpoint is uncertain, ask for the known-good and known-bad refs before bisecting.
+2. Leave the user's checkout and branch untouched. Create a temporary detached worktree for the bisect, fetch only when needed and authorized by the configured Git remote, then run native `git bisect start <bad-ref> <good-ref>` inside that temporary worktree. Do not bisect an uncommitted working tree.
+3. At each candidate commit, inspect its project setup instructions and prepare that exact revision in an isolated environment. Start its local app/preview with disposable data, then run the same Kane objective using the Git Bot recorder. Give each MP4 a unique candidate-specific filename and pass `--label "BISECT CANDIDATE · <short-sha>"`; the revision label is rendered onto every screenshot alongside Kane's annotations. Classify the run from Kane's structured result and evidence, not from the label.
+4. Classify only an application-level objective result as good or bad. Mark setup/navigation/Kane infrastructure failures as skipped (`git bisect skip`) and explain them; never count an inconclusive run as a regression. If too many candidates are skipped for Git to identify a commit, stop and report that limitation.
+5. Continue native `git bisect` until it identifies the first bad commit, then run `git bisect reset` and remove the temporary worktree, browser profile, and server processes that Git Bot started. Preserve candidate MP4s in the ignored `recordings/` directory.
+6. Report the good and bad endpoints, objective and its evidence, first bad commit (or why the result is inconclusive), candidate Kane outcomes, and MP4 paths. Do not claim bisect completion if endpoint validity was not established.
+
+The recorder captures one candidate per invocation; the skill controls checkout, app setup, Kane runs, classification, and native Git bisect. The user invokes the skill once; the agent handles candidate setup and repeated runs. It does not infer a valid historical good/bad range from an arbitrary PR without evidence.
 
 If the repository or PR cannot be resolved, ask for a full PR URL or project checkout. If a required preview, local setup, Kane login, or browser endpoint is unavailable, state the specific blocker and report only the work that actually completed.

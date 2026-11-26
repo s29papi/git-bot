@@ -14,6 +14,7 @@ Options:
   --cdp-endpoint <url>        Chrome DevTools endpoint (default: http://127.0.0.1:9222)
   --kane-bin <path>            Kane CLI executable (default: kane-cli)
   --fps <number>              Screenshot sample rate, 1–10 (default: 2)
+  --label <text>              Persistent context label shown on every frame
   --help                       Show this help
 
 Chrome must already be running with remote debugging enabled. The recorder
@@ -43,6 +44,7 @@ function parseArgs(argv) {
       'cdp-endpoint': 'cdpEndpoint',
       'kane-bin': 'kaneBin',
       fps: 'fps',
+      label: 'label',
     };
     if (!names[key]) throw new Error(`Unknown option: ${arg}`);
     options[names[key]] = key === 'fps' ? Number(value) : value;

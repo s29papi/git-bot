@@ -8,10 +8,11 @@ The base run is the bug evidence; the head run checks whether the PR fixes it. F
 
 - **Coding-agent skill:** Codex and Claude Code can accept a PR URL or number. The agent reads PR context, chooses one user-visible flow, and writes a Kane objective with an observable expected result.
 - **Base/head review for bug fixes:** The agent uses the same objective on both versions. A confirmed application failure on base and a pass on head means the bug was reproduced and the fix verified. Other result combinations are reported as regression, not reproduced, or inconclusive.
+- **Git bisect on autopilot:** For a confirmed regression with known-good and known-bad revisions, the agent uses native `git bisect` in a disposable worktree, prepares each candidate app, and runs the same Kane objective at each step. Every candidate recording is annotated with its short commit hash.
 - **Local browser recording:** Kane drives Chrome through its local CDP endpoint. Git Bot samples the browser with `Page.captureScreenshot`, adds the objective/action/result captions and a matching click-target callout, and encodes the frames as H.264 MP4.
 - **One-run CLI:** The recorder runs one Kane objective per invocation. The skill composes two invocations for a bug-fix comparison.
 
-This is a local feasibility prototype. It does not record in Kane's cloud browser, create GitHub checks, upload video, or comment on a PR. Migration checks, preview review, README gap detection, and automated bisect are not implemented.
+This is a local feasibility prototype. It does not record in Kane's cloud browser, create GitHub checks, upload video, or comment on a PR. Migration checks, preview review, and README gap detection are not implemented. Bisect requires evidence-backed good and bad endpoints; a fix PR whose base is bad and head is good is a base/head comparison, not a regression range.
 
 ## Requirements
 
@@ -102,15 +103,21 @@ $git-bot 42 video
 The agent then:
 
 1. Reads the PR, linked issue/specification, diff, and relevant checks to derive the expected browser behavior and Kane objective.
-2. Resolves the base and head apps from previews or isolated temporary checkouts, following the target repository's setup instructions.
-3. For a bug-fix PR, runs the same objective against both versions in comparable clean states. It saves separate clips, for example `recordings/pr-42-base.mp4` and `recordings/pr-42-head.mp4`.
+2. Resolves the base and head apps from previews or isolated temporary checkouts, following the target repository's setup instructions. For `bisect`, it establishes a passing good ref and failing bad ref, then uses a disposable worktree to prepare each native Git bisect candidate.
+3. For a bug-fix PR, runs the same objective against both versions in comparable clean states. It saves separate clips, for example `recordings/pr-42-base.mp4` and `recordings/pr-42-head.mp4`. For bisect, it saves a clip per candidate with the short commit hash on every frame.
 4. Reads Kane's structured result and evidence for each run, then reports whether the bug was reproduced and the fix verified. A feature PR is reported as feature verification; the expected absence of a new feature on base is not labeled a bug.
 
-The skill handles one browser objective at a time. If the PR covers multiple independent user flows, it picks the flow tied to the stated issue or explains the limitation. The agent reports blockers such as missing GitHub access, Kane authentication, Chrome/CDP, or safe app setup instead of claiming an unperformed comparison.
+For a regression, use the same invocation shape with `bisect`, for example `$git-bot https://github.com/owner/repository/pull/42 bisect`. The agent derives the browser objective, establishes evidence-backed good and bad revisions, creates a temporary bisect worktree, prepares each candidate app, and runs the same Kane check. It records each candidate with its short commit hash annotated on every frame, then reports the first bad commit and the associated clips. The user does not run the recorder separately.
+
+The skill handles one browser objective at a time. If the PR covers multiple independent user flows, it picks the flow tied to the stated issue or explains the limitation. Bisect skips setup or Kane infrastructure errors rather than counting them as application failures. If it cannot establish good/bad endpoints or enough candidate outcomes, it reports the blocker instead of claiming an unperformed bisect. The agent also reports blockers such as missing GitHub access, Kane authentication, Chrome/CDP, or safe app setup instead of claiming an unperformed comparison.
 
 ## Demo PR #2
 
 [PR #2](https://github.com/s29papi/git-bot/pull/2) was used to demonstrate the full agent workflow. The agent generated the purchase-confirmation objective from the PR and linked issue, ran it against the base and PR head, and produced a bug clip and a fix-verification clip. Kane observed the simulated payment `TypeError` on base and passed on the head, which confirms the fix for this flow. These videos are local artifacts under the ignored `recordings/` directory; the agent does not upload or comment them on GitHub.
+
+## Demo regression for Git bisect
+
+[`examples/bisect-checkout-fixture`](examples/bisect-checkout-fixture) is the passing checkout flow on `main`. The `demo/bisect-checkout-regression` PR changes its confirmation into an error after a harmless earlier commit, giving the bisect skill a known-good base and known-bad head with a real commit range to inspect. Run `$git-bot <demo PR URL> bisect` once; the agent generates the same Kane objective at each commit, saves a labeled recording per candidate, and reports the first bad commit. The fixture is local and does not process payments.
 
 ## Demo artifact
 
@@ -120,7 +127,7 @@ The skill handles one browser objective at a time. If the PR covers multiple ind
 
 1. The recorder connects to Chrome over CDP and navigates directly to the supplied app URL before taking the first frame.
 2. It captures JPEG screenshots while Kane drives the browser and emits action/result events.
-3. `sharp` adds explanatory captions and, when the target can be matched to a visible control, a click-target callout.
+3. `sharp` adds explanatory captions and, when the target can be matched to a visible control, a click-target callout. Bisect runs can also burn a candidate commit label into every frame.
 4. `ffmpeg-static` encodes the annotated frames to MP4.
 
 Kane performs the browser actions and judges the objective. Git Bot handles the local screenshot capture and video rendering; it does not replace Kane's own run evidence.

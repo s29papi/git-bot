@@ -139,6 +139,7 @@ export async function runKaneWithRecording(options) {
         targetBoxes,
         targetText: clickTargetFromObjective(options.objective),
         objective: options.objective,
+        label: options.label,
         events: annotationEvents,
       });
       await runFfmpeg({ framesDir, output, fps: options.fps });

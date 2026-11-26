@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout bisect demo</title>
+  <style>
+    :root { color-scheme: light; font: 16px/1.5 system-ui, sans-serif; color: #17212b; background: #f3f5f7; }
+    body { margin: 0; padding: 4rem 1rem; }
+    main { max-width: 34rem; margin: 0 auto; padding: 2rem; background: white; border: 1px solid #d8dee5; border-radius: 12px; box-shadow: 0 8px 28px #17212b12; }
+    h1 { margin-top: 0; }
+    .total { padding: 1rem; background: #f3f5f7; border-radius: 8px; }
+    button { width: 100%; padding: .85rem 1rem; border: 0; border-radius: 8px; color: white; background: #155eef; font: inherit; font-weight: 700; cursor: pointer; }
+    #result { min-height: 1.5rem; margin-top: 1rem; font-weight: 700; }
+    #result[data-state="success"] { color: #087443; }
+    #result[data-state="error"] { color: #b42318; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Complete your order</h1>
+    <p>Checkout regression fixture. No payment is processed.</p>
+    <p class="total">Order #1042 <strong>$49.00</strong></p>
+    <button id="complete-purchase" type="button">Complete purchase</button>
+    <p id="result" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    document.querySelector('#complete-purchase').addEventListener('click', () => {
+      const result = document.querySelector('#result');
+      result.dataset.state = 'success';
+      result.textContent = 'Order #1042 confirmed — $49.00';
+    });
+  </script>
+</body>
+</html>

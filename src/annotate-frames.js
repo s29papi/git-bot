@@ -57,7 +57,7 @@ function targetCallout(width, height, targetBox, targetText) {
     <text x="${labelX + 12}" y="${labelY + 25}" fill="#8f1d16" font-family="Arial, sans-serif" font-size="15" font-weight="700">${escapeXml(label)}</text>`;
 }
 
-function overlaySvg(width, height, caption, callout = '') {
+function overlaySvg(width, height, caption, callout = '', label = '') {
   const margin = Math.max(18, Math.round(width * 0.025));
   const cardHeight = Math.max(100, Math.min(130, Math.round(height * 0.28)));
   const cardWidth = width - margin * 2;
@@ -70,10 +70,13 @@ function overlaySvg(width, height, caption, callout = '') {
   const messageText = messageLines.map((line, index) =>
     `<tspan x="${margin + 24}" dy="${index === 0 ? 0 : Math.round(fontSize * 1.25)}">${escapeXml(line)}</tspan>`
   ).join('');
+  const labelText = label ? String(label).replace(/\s+/g, ' ').trim() : '';
+  const labelWidth = labelText ? Math.min(width - margin * 2, Math.max(180, labelText.length * 11 + 36)) : 0;
 
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
     <defs><filter id="shadow" x="-20%" y="-30%" width="140%" height="170%"><feGaussianBlur stdDeviation="7"/></filter><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#b42318"/></marker></defs>
     ${callout}
+    ${labelText ? `<rect x="${margin}" y="${margin}" width="${labelWidth}" height="38" rx="8" fill="#101820" opacity=".94"/><text x="${margin + 14}" y="${margin + 25}" fill="#fff" font-family="Arial, sans-serif" font-size="15" font-weight="700">${escapeXml(labelText.length > 100 ? `${labelText.slice(0, 97)}…` : labelText)}</text>` : ''}
     <rect x="${margin}" y="${cardY + 4}" width="${cardWidth}" height="${cardHeight}" rx="14" fill="#000" opacity=".22" filter="url(#shadow)"/>
     <rect x="${margin}" y="${cardY}" width="${cardWidth}" height="${cardHeight}" rx="14" fill="#101820" opacity=".94"/>
     <rect x="${margin}" y="${cardY}" width="6" height="${cardHeight}" rx="3" fill="${accent}"/>
@@ -82,7 +85,7 @@ function overlaySvg(width, height, caption, callout = '') {
   </svg>`);
 }
 
-export async function annotateFrames({ framesDir, frameTimes, targetBoxes, targetText, objective, events }) {
+export async function annotateFrames({ framesDir, frameTimes, targetBoxes, targetText, objective, events, label }) {
   const firstClickAt = events.find((event) => event.status === 'step' && /^Clicked\b/i.test(event.message))?.at;
   for (let index = 0; index < frameTimes.length; index += 1) {
     const filename = `${String(index + 1).padStart(6, '0')}.jpg`;
@@ -97,7 +100,7 @@ export async function annotateFrames({ framesDir, frameTimes, targetBoxes, targe
       ? targetCallout(width, height, targetBoxes[index], targetText)
       : '';
     await image
-      .composite([{ input: overlaySvg(width, height, caption, callout) }])
+      .composite([{ input: overlaySvg(width, height, caption, callout, label) }])
       .jpeg({ quality: 90 })
       .toFile(temporaryPath);
     await fs.rename(temporaryPath, framePath);
