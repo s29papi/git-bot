@@ -27,8 +27,8 @@
   <script>
     document.querySelector('#complete-purchase').addEventListener('click', () => {
       const result = document.querySelector('#result');
-      result.dataset.state = 'success';
-      result.textContent = 'Order #1042 confirmed — $49.00';
+      result.dataset.state = 'error';
+      result.textContent = 'Payment service unavailable. Please try again.';
     });
   </script>
 </body>
