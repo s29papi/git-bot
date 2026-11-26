@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Checkout bisect demo</title>
+  <title>Safe checkout demo</title>
   <style>
     :root { color-scheme: light; font: 16px/1.5 system-ui, sans-serif; color: #17212b; background: #f3f5f7; }
     body { margin: 0; padding: 4rem 1rem; }
@@ -19,7 +19,7 @@
 <body>
   <main>
     <h1>Complete your order</h1>
-    <p>Checkout regression fixture. No payment is processed.</p>
+    <p>Checkout regression fixture. No payment is processed. Demo environment only.</p>
     <p class="total">Order #1042 <strong>$49.00</strong></p>
     <button id="complete-purchase" type="button">Complete purchase</button>
     <p id="result" role="status" aria-live="polite"></p>
@@ -27,8 +27,8 @@
   <script>
     document.querySelector('#complete-purchase').addEventListener('click', () => {
       const result = document.querySelector('#result');
-      result.dataset.state = 'success';
-      result.textContent = 'Order #1042 confirmed — $49.00';
+      result.dataset.state = 'error';
+      result.textContent = 'Payment service unavailable. Please try again.';
     });
   </script>
 </body>
