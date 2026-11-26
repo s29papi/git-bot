@@ -95,7 +95,9 @@ codex  # or: claude
 
 Open the application repository in the coding agent, then invoke the skill with a PR URL or number.
 
-## Run the recorder directly
+## Optional: smoke-test one local recording
+
+This is a one-run check of the screenshot-to-MP4 recorder against the deliberately broken local fixture. It does not inspect a PR, derive an objective, or compare branches. For the full base/head PR workflow, use [Review a PR with the skill](#review-a-pr-with-the-skill) or follow [Reproduce the base/head demo for PR #2](#reproduce-the-basehead-demo-for-pr-2).
 
 The included checkout fixture is deliberately broken. Start a local server in one terminal from the Git Bot repository:
 
