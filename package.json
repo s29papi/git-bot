@@ -1,0 +1,16 @@
+{
+  "name": "git-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capture a video while Kane CLI reproduces a browser bug.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/cli.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
